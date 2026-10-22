@@ -1,12 +1,20 @@
 import fs from "node:fs"
 import bencode from "bencode"
-import {Buffer} from "node:buffer"
+import { Buffer } from "node:buffer"
+import crypto from "node:crypto"
 
-// const torrentBuffer = fs.readFileSync("koneko-chan.torrent"); //http Announce URL
-const torrentBuffer = fs.readFileSync("big-buck-bunny.torrent"); // UDP Announce URL
+export const parseTorrent = function (filePath) {
+    const torrentBuffer = fs.readFileSync(filePath);
+    return bencode.decode(torrentBuffer);
+};
 
-const torrentDecoded = bencode.decode(torrentBuffer);
-const announceURL = Buffer.from(torrentDecoded.announce).toString("utf-8");
+export const announceTracker = function (torrentOBJ) {
+    return Buffer.from(torrentOBJ.announce).toString("utf-8");
+};
 
-console.log(torrentDecoded);
-console.log(announceURL);
+export const info_Hash = function(torrentOBJ) {
+    const infoBuffer = bencode.encode(torrentOBJ.info);
+    return crypto.createHash("sha1").update(infoBuffer).digest();
+};
+
+
