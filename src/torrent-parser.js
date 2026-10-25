@@ -17,4 +17,11 @@ export const info_Hash = function(torrentOBJ) {
     return crypto.createHash("sha1").update(infoBuffer).digest();
 };
 
+export const itemSize = function(torrentOBJ) {
+    const sizeBuffer = Buffer.alloc(8);
+    const totalSize = BigInt(torrentOBJ.info.files ? torrentOBJ.info.files.reduce((total, file) => total + file.length, 0) : torrentOBJ.info.length);
 
+    sizeBuffer.writeBigUInt64BE(totalSize);
+
+    return sizeBuffer;
+};
