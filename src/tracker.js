@@ -37,7 +37,10 @@ export const getPeersList = function (torrentOBJ, callback) {
 
             socket.close();
 
-        };
+        }
+        else if (responseType(response) === "error") {
+            console.log(`Request rejected by tracker. Rejection message: ${response.subarray(8).toString("utf-8")}`);
+        }
     });
 };
 
@@ -65,6 +68,9 @@ const responseType = function(res) {
     }
     else if (res.readUInt32BE(0) === 1) {
         return "announce";
+    }
+    else if (res.readUInt32BE(0) === 3) {
+        return "error";
     }
 };
 
