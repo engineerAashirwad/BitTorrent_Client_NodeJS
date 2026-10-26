@@ -1,5 +1,5 @@
 import dgram from "node:dgram"
-import crypto, { createPrivateKey } from "node:crypto"
+import crypto from "node:crypto"
 import {Buffer} from "node:buffer"
 import {announceTracker, info_Hash, itemSize} from "./torrent-parser.js"
 import {genPeerId} from "./peer-id.js"
