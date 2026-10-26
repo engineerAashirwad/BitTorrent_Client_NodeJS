@@ -1,7 +1,8 @@
 import dgram from "node:dgram"
-import crypto from "node:crypto"
+import crypto, { createPrivateKey } from "node:crypto"
 import {Buffer} from "node:buffer"
-import {announceTracker} from "./torrent-parser.js"
+import {announceTracker, info_Hash, itemSize} from "./torrent-parser.js"
+import {genPeerId} from "./peer-id.js"
 
 export const getPeersList = function (torrentOBJ, callback) {
     const socket = dgram.createSocket("udp4");
@@ -21,8 +22,22 @@ export const getPeersList = function (torrentOBJ, callback) {
         if (responseType(response) === "connect") {
             const connectionResponse = parseConnectionRes(response);
 
-            console.log(`Recieved Connection id, buffer: ${connectionResponse.connectionID} , hex: ${connectionResponse.connectionID.toString("hex")}`);
+            console.log(`Recieved Connection id, length: ${connectionResponse.connectionID.length} , hex: ${connectionResponse.connectionID.toString("hex")} , Sending Announce Request...`);
+
+            const announceRequest = buildAnnounceReq(connectionResponse.connectionID, torrentOBJ);
+
+            socket.send(announceRequest, 0, announceRequest.length, url.port, url.hostname);    // Needs callback for error handling and "Request sent!" Log.
         }
+        else if (responseType(response) === "announce") {
+            const announceResponse = parseAnnounceRes(response);
+            console.log(`Success! Found ${announceResponse.peers.length} peers.`);
+            console.log(`There are ${announceResponse.leechers} leechers and there are ${announceResponse.seeders} seeders. The interval time is: ${announceResponse.interval} seconds.`);
+
+            callback(announceResponse.peers);
+
+            socket.close();
+
+        };
     });
 };
 
@@ -51,4 +66,48 @@ const responseType = function(res) {
     else if (res.readUInt32BE(0) === 1) {
         return "announce";
     }
+};
+
+const buildAnnounceReq = function(connectionID, torrentOBJ, PORT = 6881) {
+    const announceReqBuff = Buffer.alloc(98);
+
+    connectionID.copy(announceReqBuff, 0);
+    announceReqBuff.writeUInt32BE(1, 8);    // Action = 1; ANNOUNCE
+    crypto.randomBytes(4).copy(announceReqBuff, 12);
+    info_Hash(torrentOBJ).copy(announceReqBuff, 16);
+    genPeerId().copy(announceReqBuff, 36);
+    announceReqBuff.writeBigUInt64BE(0n, 56);
+    itemSize(torrentOBJ).copy(announceReqBuff, 64);
+    announceReqBuff.writeBigUInt64BE(0n, 72);
+    announceReqBuff.writeUInt32BE(0, 80);
+    announceReqBuff.writeUInt32BE(0, 84);
+    crypto.randomBytes(4).copy(announceReqBuff, 88);
+    announceReqBuff.writeInt32BE(-1, 92);
+    announceReqBuff.writeUint16BE(PORT, 96);
+
+    return announceReqBuff;
+};
+
+const parseAnnounceRes = function(res) {
+    return {
+        action: res.readUInt32BE(0),
+        transactionID: res.readUInt32BE(4),
+        interval: res.readUInt32BE(8),
+        leechers: res.readUInt32BE(12),
+        seeders: res.readUInt32BE(16),
+        peers: groupAndParsePeers(res.subarray(20)),
+    };
+};
+
+const groupAndParsePeers = function(peerBuffer) {
+    const peers = [];
+
+    for(let i = 0; i < peerBuffer.length; i += 6) {
+        peers.push({
+            ip: peerBuffer.subarray(i, i + 4).join("."),
+            port: peerBuffer.readUInt16BE(i + 4),
+        });
+    }
+
+    return peers;
 };
