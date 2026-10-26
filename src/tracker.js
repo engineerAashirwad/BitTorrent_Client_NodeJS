@@ -25,3 +25,30 @@ export const getPeersList = function (torrentOBJ, callback) {
         }
     });
 };
+
+const buildConnectionReq = function() {
+    const connectMessage = Buffer.alloc(16);
+
+    connectMessage.writeBigUInt64BE(0x41727101980n, 0); // Hardcoded Bittorrent Specification constant.
+    connectMessage.writeUInt32BE(0, 8);    // Action = 0; CONNECT
+    crypto.randomBytes(4).copy(connectMessage, 12);
+
+    return connectMessage;
+};
+
+const parseConnectionRes = function(res) {
+    return {
+        action: res.readUInt32BE(0),
+        transactionID: res.readUInt32BE(4),
+        connectionID: res.subarray(8, 16),
+    };
+};
+
+const responseType = function(res) {
+    if(res.readUInt32BE(0) === 0) {
+        return "connect";
+    }
+    else if (res.readUInt32BE(0) === 1) {
+        return "announce";
+    }
+};

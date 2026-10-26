@@ -16,6 +16,8 @@ const infoHash = info_Hash(torrentDecoded);
 
 const totalSizeBuf = itemSize(torrentDecoded);
 
+getPeersList(torrentDecoded, ()=>console.log("------------------"));
+
 console.log(torrentDecoded);
 console.log(announceURL);
 console.log(infoHash);
