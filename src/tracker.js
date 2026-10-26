@@ -21,7 +21,7 @@ export const getPeersList = function (torrentOBJ, callback) {
         if (responseType(response) === "connect") {
             const connectionResponse = parseConnectionRes(response);
 
-            
+            console.log(`Recieved Connection id, buffer: ${connectionResponse.connectionID} , hex: ${connectionResponse.connectionID.toString("hex")}`);
         }
     });
 };
