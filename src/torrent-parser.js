@@ -31,16 +31,16 @@ export const itemSize = function(torrentOBJ) {
 export const pieceLength = function(torrentOBJ, pieceIndex) {
 
     const totalLength = itemSize(torrentOBJ).readBigUInt64BE(0);
-    const pieceLength = BigInt(torrentOBJ.info["piece length"]);
+    const pieceLen = BigInt(torrentOBJ.info["piece length"]);
 
-    const lastPieceLength = totalLength % pieceLength;
-    const lastPieceIndex = totalLength / pieceLength;   // BigInt division floors automatically.
+    const lastPieceLength = totalLength % pieceLen;
+    const lastPieceIndex = totalLength / pieceLen;   // BigInt division floors automatically.
 
     if (lastPieceIndex === BigInt(pieceIndex) && lastPieceLength !== 0n) {
         return Number(lastPieceLength);
     }
 
-    return Number(pieceLength);
+    return Number(pieceLen);
 };
 
 export const blocksPerPiece = function(torrentOBJ, pieceIndex) {
