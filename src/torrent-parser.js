@@ -52,7 +52,7 @@ export const blockLength = function(torrentOBJ, pieceIndex, blockIndex) {
     const pieceLen = pieceLength(torrentOBJ, pieceIndex);
 
     const lastBlockLength = pieceLen % BLOCK_LEN;
-    const lastBlockIndex = pieceLen / BLOCK_LEN;
+    const lastBlockIndex = Math.floor(pieceLen / BLOCK_LEN);
 
     if (lastBlockIndex === blockIndex && lastBlockLength !== 0) {
         return lastBlockLength;
