@@ -1,6 +1,7 @@
 import { parseTorrent, announceTracker, info_Hash, itemSize } from "./src/torrent-parser.js"
 import {genPeerId} from "./src/peer-id.js"
 import {getPeersList} from "./src/tracker.js"
+import {download} from "./src/download.js"
 
 // big-buck-bunny.torrent -> UDP Tracker URL
 // koneko-chan.torrent -> HTTP Tracker URL
@@ -18,6 +19,10 @@ const totalSizeBuf = itemSize(torrentDecoded);
 
 getPeersList(torrentDecoded, (peers) => {
     console.log("The list of peers: ", peers);
+    
+    peers.forEach((peer) => {
+        download(peer, torrentDecoded);
+    });
 });
 
 console.log(torrentDecoded);
