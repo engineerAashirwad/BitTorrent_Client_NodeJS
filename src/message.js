@@ -64,6 +64,16 @@ export const buildHave = function(payload) {
     return haveBuf;
 };
 
+export const buildBitfield = function(bitfield) {
+    const bitfieldBuf = Buffer.alloc(bitfield.length + 4 + 1);
+
+    bitfieldBuf.writeUInt32BE(bitfield.length + 1, 0);
+    bitfieldBuf.writeUInt8(5, 4);
+    bitfield.copy(bitfieldBuf, 5);
+
+    return bitfieldBuf;
+};
+
 export const buildRequest = function(payload) {
     const requestBuf = Buffer.alloc(17);
 
@@ -76,6 +86,37 @@ export const buildRequest = function(payload) {
     return requestBuf;
 };
 
-export const parseMessage = function(msg) {
-    const id = msg.length > 4 ? msg.readUInt8(4) : null;
+export const buildPiece = function(payload) {
+    const pieceBuf = Buffer.alloc(4 + 1 + 4 + 4 + payload.block.length);
+
+    pieceBuf.writeUInt32BE(payload.block.length + 1 + 4 + 4, 0);
+    pieceBuf.writeUInt8(7, 4);
+    pieceBuf.writeUInt32BE(payload.index, 5);
+    pieceBuf.writeUInt32BE(payload.begin, 9);
+    payload.block.copy(pieceBuf, 13);
+
+    return pieceBuf;
+
+};
+
+export const buildCancel = function(payload) {
+    const cancelBuf = Buffer.alloc(17);
+
+    cancelBuf.writeUInt32BE(13, 0);
+    cancelBuf.writeUInt8(8, 4);
+    cancelBuf.writeUInt32BE(payload.index, 5);
+    cancelBuf.writeUInt32BE(payload.begin, 9);
+    cancelBuf.writeUInt32BE(payload.length, 13);
+
+    return cancelBuf;
+};
+
+export const buildPort = function(port) {
+    const portBuf = Buffer.alloc(7);
+
+    portBuf.writeUInt32BE(3, 0);
+    portBuf.writeUInt8(9, 4);
+    portBuf.writeUInt16BE(port, 5);
+
+    return portBuf;
 };
