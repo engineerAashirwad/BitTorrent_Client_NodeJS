@@ -1,8 +1,8 @@
 import dgram from "node:dgram"
 import crypto from "node:crypto"
-import {Buffer} from "node:buffer"
-import {announceTracker, info_Hash, itemSize} from "./torrent-parser.js"
-import {genPeerId} from "./peer-id.js"
+import { Buffer } from "node:buffer"
+import { announceTracker, info_Hash, itemSize } from "./torrent-parser.js"
+import { genPeerId } from "./peer-id.js"
 
 export const getPeersList = function (torrentOBJ, callback) {
     const socket = dgram.createSocket("udp4");
@@ -44,7 +44,7 @@ export const getPeersList = function (torrentOBJ, callback) {
     });
 };
 
-const buildConnectionReq = function() {
+const buildConnectionReq = function () {
     const connectMessage = Buffer.alloc(16);
 
     connectMessage.writeBigUInt64BE(0x41727101980n, 0); // Hardcoded Bittorrent Specification constant.
@@ -54,7 +54,7 @@ const buildConnectionReq = function() {
     return connectMessage;
 };
 
-const parseConnectionRes = function(res) {
+const parseConnectionRes = function (res) {
     return {
         action: res.readUInt32BE(0),
         transactionID: res.readUInt32BE(4),
@@ -62,8 +62,8 @@ const parseConnectionRes = function(res) {
     };
 };
 
-const responseType = function(res) {
-    if(res.readUInt32BE(0) === 0) {
+const responseType = function (res) {
+    if (res.readUInt32BE(0) === 0) {
         return "connect";
     }
     else if (res.readUInt32BE(0) === 1) {
@@ -74,7 +74,7 @@ const responseType = function(res) {
     }
 };
 
-const buildAnnounceReq = function(connectionID, torrentOBJ, PORT = 6881) {
+const buildAnnounceReq = function (connectionID, torrentOBJ, PORT = 6881) {
     const announceReqBuff = Buffer.alloc(98);
 
     connectionID.copy(announceReqBuff, 0);
@@ -94,7 +94,7 @@ const buildAnnounceReq = function(connectionID, torrentOBJ, PORT = 6881) {
     return announceReqBuff;
 };
 
-const parseAnnounceRes = function(res) {
+const parseAnnounceRes = function (res) {
     return {
         action: res.readUInt32BE(0),
         transactionID: res.readUInt32BE(4),
@@ -105,10 +105,10 @@ const parseAnnounceRes = function(res) {
     };
 };
 
-const groupAndParsePeers = function(peerBuffer) {
+const groupAndParsePeers = function (peerBuffer) {
     const peers = [];
 
-    for(let i = 0; i < peerBuffer.length; i += 6) {
+    for (let i = 0; i < peerBuffer.length; i += 6) {
         peers.push({
             ip: peerBuffer.subarray(i, i + 4).join("."),
             port: peerBuffer.readUInt16BE(i + 4),

@@ -1,8 +1,8 @@
 import net from "node:net"
-import {Buffer} from "node:buffer"
-import {buildHandshake} from "./message.js"
+import { Buffer } from "node:buffer"
+import { buildHandshake } from "./message.js"
 
-export const download = function(peer, torrentOBJ) {
+export const download = function (peer, torrentOBJ) {
     const socket = new net.Socket();
 
     socket.on("error", (err) => {
@@ -22,7 +22,7 @@ export const download = function(peer, torrentOBJ) {
 
 };
 
-const onWholeMessage = function(socket, callback) {
+const onWholeMessage = function (socket, callback) {
     let savedBuf = Buffer.alloc(0);
     let handshakeMessage = true;
 
@@ -30,7 +30,7 @@ const onWholeMessage = function(socket, callback) {
         const messageLength = () => handshakeMessage ? savedBuf.readUInt8(0) + 49 : savedBuf.readUInt32BE(0) + 4;  // readUInt32BE(0) + <Length-Prefix> Length;
         savedBuf = Buffer.concat([savedBuf, recievedBuf]);
 
-        while(savedBuf.length >= 4 && savedBuf.length >= messageLength()) {
+        while (savedBuf.length >= 4 && savedBuf.length >= messageLength()) {
             callback(savedBuf.subarray(0, messageLength()));
             savedBuf = savedBuf.subarray(messageLength());
             handshakeMessage = false;

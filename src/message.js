@@ -1,8 +1,8 @@
-import {Buffer} from "node:buffer"
-import {info_Hash} from "./torrent-parser.js"
-import {genPeerId} from "./peer-id.js"
+import { Buffer } from "node:buffer"
+import { info_Hash } from "./torrent-parser.js"
+import { genPeerId } from "./peer-id.js"
 
-export const buildHandshake = function(torrentOBJ) {
+export const buildHandshake = function (torrentOBJ) {
     const handshakeBuffer = Buffer.alloc(68);
 
     handshakeBuffer.writeUInt8(19, 0);
@@ -14,11 +14,11 @@ export const buildHandshake = function(torrentOBJ) {
     return handshakeBuffer;
 };
 
-export const buildKeepAlive = function() {
+export const buildKeepAlive = function () {
     return Buffer.alloc(4);
 };
 
-export const buildChoke = function() {
+export const buildChoke = function () {
     const chokeBuf = Buffer.alloc(5);
 
     chokeBuf.writeUInt32BE(1, 0);
@@ -27,7 +27,7 @@ export const buildChoke = function() {
     return chokeBuf;
 };
 
-export const buildUnchoke = function() {
+export const buildUnchoke = function () {
     const unchokeBuf = Buffer.alloc(5);
 
     unchokeBuf.writeUInt32BE(1, 0);
@@ -36,7 +36,7 @@ export const buildUnchoke = function() {
     return unchokeBuf;
 };
 
-export const buildInterested = function() {
+export const buildInterested = function () {
     const interestedBuf = Buffer.alloc(5);
 
     interestedBuf.writeUInt32BE(1, 0);
@@ -45,7 +45,7 @@ export const buildInterested = function() {
     return interestedBuf;
 };
 
-export const buildUninterested = function() {
+export const buildUninterested = function () {
     const uninterestedBuf = Buffer.alloc(5);
 
     uninterestedBuf.writeUInt32BE(1, 0);
@@ -54,7 +54,7 @@ export const buildUninterested = function() {
     return uninterestedBuf;
 };
 
-export const buildHave = function(payload) {
+export const buildHave = function (payload) {
     const haveBuf = Buffer.alloc(9);
 
     haveBuf.writeUInt32BE(5, 0);
@@ -64,7 +64,7 @@ export const buildHave = function(payload) {
     return haveBuf;
 };
 
-export const buildBitfield = function(bitfield) {
+export const buildBitfield = function (bitfield) {
     const bitfieldBuf = Buffer.alloc(bitfield.length + 4 + 1);
 
     bitfieldBuf.writeUInt32BE(bitfield.length + 1, 0);
@@ -74,7 +74,7 @@ export const buildBitfield = function(bitfield) {
     return bitfieldBuf;
 };
 
-export const buildRequest = function(payload) {
+export const buildRequest = function (payload) {
     const requestBuf = Buffer.alloc(17);
 
     requestBuf.writeUInt32BE(13, 0);
@@ -86,7 +86,7 @@ export const buildRequest = function(payload) {
     return requestBuf;
 };
 
-export const buildPiece = function(payload) {
+export const buildPiece = function (payload) {
     const pieceBuf = Buffer.alloc(4 + 1 + 4 + 4 + payload.block.length);
 
     pieceBuf.writeUInt32BE(payload.block.length + 1 + 4 + 4, 0);
@@ -99,7 +99,7 @@ export const buildPiece = function(payload) {
 
 };
 
-export const buildCancel = function(payload) {
+export const buildCancel = function (payload) {
     const cancelBuf = Buffer.alloc(17);
 
     cancelBuf.writeUInt32BE(13, 0);
@@ -111,7 +111,7 @@ export const buildCancel = function(payload) {
     return cancelBuf;
 };
 
-export const buildPort = function(port) {
+export const buildPort = function (port) {
     const portBuf = Buffer.alloc(7);
 
     portBuf.writeUInt32BE(3, 0);

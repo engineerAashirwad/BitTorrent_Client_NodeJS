@@ -14,12 +14,12 @@ export const announceTracker = function (torrentOBJ) {
     return Buffer.from(torrentOBJ.announce).toString("utf-8");
 };
 
-export const info_Hash = function(torrentOBJ) {
+export const info_Hash = function (torrentOBJ) {
     const infoBuffer = bencode.encode(torrentOBJ.info);
     return crypto.createHash("sha1").update(infoBuffer).digest();
 };
 
-export const itemSize = function(torrentOBJ) {
+export const itemSize = function (torrentOBJ) {
     const sizeBuffer = Buffer.alloc(8);
     const totalSize = BigInt(torrentOBJ.info.files ? torrentOBJ.info.files.reduce((total, file) => total + file.length, 0) : torrentOBJ.info.length);
 
@@ -28,7 +28,7 @@ export const itemSize = function(torrentOBJ) {
     return sizeBuffer;
 };
 
-export const pieceLength = function(torrentOBJ, pieceIndex) {
+export const pieceLength = function (torrentOBJ, pieceIndex) {
 
     const totalLength = itemSize(torrentOBJ).readBigUInt64BE(0);
     const pieceLen = BigInt(torrentOBJ.info["piece length"]);
@@ -43,12 +43,12 @@ export const pieceLength = function(torrentOBJ, pieceIndex) {
     return Number(pieceLen);
 };
 
-export const blocksPerPiece = function(torrentOBJ, pieceIndex) {
+export const blocksPerPiece = function (torrentOBJ, pieceIndex) {
     const pieceLen = pieceLength(torrentOBJ, pieceIndex);
     return Math.ceil(pieceLen / BLOCK_LEN);
 };
 
-export const blockLength = function(torrentOBJ, pieceIndex, blockIndex) {
+export const blockLength = function (torrentOBJ, pieceIndex, blockIndex) {
     const pieceLen = pieceLength(torrentOBJ, pieceIndex);
 
     const lastBlockLength = pieceLen % BLOCK_LEN;
