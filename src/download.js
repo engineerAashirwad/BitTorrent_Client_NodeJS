@@ -1,6 +1,6 @@
 import net from "node:net"
 import { Buffer } from "node:buffer"
-import { buildHandshake, buildInterested } from "./message.js"
+import { buildHandshake, buildInterested, parseMessage } from "./message.js"
 
 export const download = function (peer, torrentOBJ) {
     const socket = new net.Socket();
@@ -38,13 +38,32 @@ const onWholeMessage = function (socket, callback) {
     });
 };
 
-const messageHandler = function(msg, socket) {
+const messageHandler = function (msg, socket) {
     if (isHandshake(msg)) {
         const interestedMsg = buildInterested();
         socket.write(interestedMsg);
     }
+    else {
+        const m = parseMessage(msg);
+
+        if (m.id === 0) {
+            chokeHandler();
+        }
+        if (m.id === 1) {
+            unchokeHandler();
+        }
+        if (m.id === 4) {
+            haveHandler(m.payload);
+        }
+        if (m.id === 5) {
+            bitfieldHandler(m.payload);
+        }
+        if (m.id === 7) {
+            pieceHandler(m.payload);
+        }
+    }
 };
 
-const isHandshake = function(msg) {
+const isHandshake = function (msg) {
     return msg.length === msg.readUInt8(0) + 49 && msg.toString("utf-8", 1, 20) === "BitTorrent protocol";
 };

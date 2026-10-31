@@ -120,3 +120,22 @@ export const buildPort = function (port) {
 
     return portBuf;
 };
+
+export const parseMessage = function (msg) {
+    const id = msg.length > 4 ? msg.readUInt8(4) : null;
+    let payload = msg.length > 5 ? msg.subarray(5) : null;
+    if (id === 6 || id === 7 || id === 8) {
+        const rest = payload.subarray(8);  // id = 6/7/8 have payloads of minimum 8 bytes, index(4B), begin(4B) and length(4B)/block(xB).
+        payload = {
+            index: payload.readUInt32BE(0),
+            begin: payload.readUInt32BE(4),
+        };
+        payload[id === 7 ? "block" : "length"] = rest;
+    }
+
+    return {
+        size: msg.readUInt32BE(0),
+        id,
+        payload,
+    };
+};
