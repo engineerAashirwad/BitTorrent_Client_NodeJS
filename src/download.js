@@ -1,6 +1,6 @@
 import net from "node:net"
 import { Buffer } from "node:buffer"
-import { buildHandshake } from "./message.js"
+import { buildHandshake, buildInterested } from "./message.js"
 
 export const download = function (peer, torrentOBJ) {
     const socket = new net.Socket();
@@ -17,7 +17,7 @@ export const download = function (peer, torrentOBJ) {
     });
 
     onWholeMessage(socket, msg => {
-
+        messageHandler(msg, socket);
     });
 
 };
@@ -36,4 +36,15 @@ const onWholeMessage = function (socket, callback) {
             handshakeMessage = false;
         }
     });
+};
+
+const messageHandler = function(msg, socket) {
+    if (isHandshake(msg)) {
+        const interestedMsg = buildInterested();
+        socket.write(interestedMsg);
+    }
+};
+
+const isHandshake = function(msg) {
+    return msg.length === msg.readUInt8(0) + 49 && msg.toString("utf-8", 1, 20) === "BitTorrent protocol";
 };
