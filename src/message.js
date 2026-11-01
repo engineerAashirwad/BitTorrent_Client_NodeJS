@@ -40,7 +40,7 @@ export const buildInterested = function () {
     const interestedBuf = Buffer.alloc(5);
 
     interestedBuf.writeUInt32BE(1, 0);
-    interestedBuf.writeUInt8(2, 0);
+    interestedBuf.writeUInt8(2, 4);
 
     return interestedBuf;
 };
