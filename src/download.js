@@ -3,11 +3,12 @@ import { Buffer } from "node:buffer"
 import { buildHandshake, buildInterested, parseMessage, buildRequest } from "./message.js"
 import { getPeersList } from "./tracker.js"
 import Pieces from "./Pieces.js"
+import Queue from "./Queue.js"
 
 export default function (torrentOBJ) {
 
     getPeersList(torrentOBJ, (peers) => {
-        const pieces = new Pieces(torrentOBJ.info.pieces.length / 20);
+        const pieces = new Pieces(torrentOBJ);
         console.log(`The List of peers: `, peers);
         peers.forEach((peer) => {
             download(peer, torrentOBJ, pieces);
@@ -29,7 +30,7 @@ const download = function (peer, torrentOBJ, pieces) {
         socket.write(handshake);
     });
 
-    const queue = { choked: true, queue: [] };
+    const queue = new Queue(torrentOBJ);
     onWholeMessage(socket, msg => {
         messageHandler(msg, socket, pieces, queue);
     });
@@ -104,11 +105,11 @@ const requestPiece = function (socket, pieces, queue) {
         return null;
     }
 
-    while (queue.queue.length) {
-        const pieceIndex = queue.shift();
-        if (pieces.needed(pieceIndex)) {
-            socket.write(buildRequest(pieceIndex));
-            pieces.addRequested(pieceIndex);
+    while (queue.length()) {
+        const pieceBlock = queue.deque();
+        if (pieces.needed(pieceBlock)) {
+            socket.write(buildRequest(pieceBlock));
+            pieces.addRequested(pieceBlock);
             break;
         }
     }
