@@ -1,8 +1,20 @@
 import net from "node:net"
 import { Buffer } from "node:buffer"
-import { buildHandshake, buildInterested, parseMessage } from "./message.js"
+import { buildHandshake, buildInterested, parseMessage, buildRequest } from "./message.js"
+import { getPeersList } from "./tracker.js"
 
-export const download = function (peer, torrentOBJ) {
+export default function (torrentOBJ) {
+    const requested = [];
+
+    getPeersList(torrentOBJ, (peers) => {
+        console.log(`The List of peers: `, peers);
+        peers.forEach((peer) => {
+            download(peer, torrentOBJ, requested);
+        });
+    });
+};
+
+const download = function (peer, torrentOBJ, requested) {
     const socket = new net.Socket();
 
     socket.on("error", (err) => {
@@ -16,8 +28,9 @@ export const download = function (peer, torrentOBJ) {
         socket.write(handshake);
     });
 
+    const queue = [];
     onWholeMessage(socket, msg => {
-        messageHandler(msg, socket);
+        messageHandler(msg, socket, requested, queue);
     });
 
 };
@@ -38,7 +51,7 @@ const onWholeMessage = function (socket, callback) {
     });
 };
 
-const messageHandler = function (msg, socket) {
+const messageHandler = function (msg, socket, requested, queue) {
     if (isHandshake(msg)) {
         const interestedMsg = buildInterested();
         socket.write(interestedMsg);
@@ -53,17 +66,39 @@ const messageHandler = function (msg, socket) {
             unchokeHandler();
         }
         if (m.id === 4) {
-            haveHandler(m.payload);
+            haveHandler(m.payload, socket, requested, queue);
         }
         if (m.id === 5) {
             bitfieldHandler(m.payload);
         }
         if (m.id === 7) {
-            pieceHandler(m.payload);
+            pieceHandler(m.payload, socket, requested, queue);
         }
     }
 };
 
 const isHandshake = function (msg) {
     return msg.length === msg.readUInt8(0) + 49 && msg.toString("utf-8", 1, 20) === "BitTorrent protocol";
+};
+
+const haveHandler = function (payload, socket, requested, queue) {
+    const pieceIndex = payload.readUInt32BE(0);
+    queue.push(pieceIndex);
+    if (queue.length === 1) {
+        requestPiece(socket, requested, queue);
+    }
+};
+
+const pieceHandler = function(payload, socket, requested, queue) {
+    queue.shift();
+    requestPiece(socket, requested, queue);
+};
+
+const requestPiece = function(socket, requested, queue) {
+    if(requested[queue[0]]) {
+        queue.shift();
+    }
+    else {
+        socket.write(buildRequest(pieceIndex));
+    }
 };
