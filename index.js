@@ -1,6 +1,7 @@
 import { parseTorrent, announceTracker, info_Hash, itemSize } from "./src/torrent-parser.js"
 import { genPeerId } from "./src/peer-id.js"
 import download from "./src/download.js"
+import {Buffer} from "node:buffer"
 
 // big-buck-bunny.torrent -> UDP Tracker URL
 // koneko-chan.torrent -> HTTP Tracker URL
@@ -16,7 +17,7 @@ const infoHash = info_Hash(torrentDecoded);
 
 const totalSizeBuf = itemSize(torrentDecoded);
 
-download(torrentDecoded, torrentDecoded.info.name);
+download(torrentDecoded, Buffer.from(torrentDecoded.info.name).toString("utf-8"));
 
 console.log(torrentDecoded);
 console.log(announceURL);
