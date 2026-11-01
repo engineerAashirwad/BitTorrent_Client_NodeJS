@@ -4,11 +4,11 @@ import download from "./src/download.js"
 
 // big-buck-bunny.torrent -> UDP Tracker URL
 // koneko-chan.torrent -> HTTP Tracker URL
-const filePath = process.argv[2];
+const torrentFilePath = process.argv[2];
 
 const peer_id = genPeerId();
 
-const torrentDecoded = parseTorrent(filePath);
+const torrentDecoded = parseTorrent(torrentFilePath);
 
 const announceURL = announceTracker(torrentDecoded);
 
@@ -16,6 +16,7 @@ const infoHash = info_Hash(torrentDecoded);
 
 const totalSizeBuf = itemSize(torrentDecoded);
 
+download(torrentDecoded, torrentDecoded.info.name);
 
 console.log(torrentDecoded);
 console.log(announceURL);
