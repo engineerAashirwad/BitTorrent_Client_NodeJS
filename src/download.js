@@ -1,5 +1,6 @@
 import net from "node:net"
 import fs from "node:fs"
+import path from "node:path"
 import { Buffer } from "node:buffer"
 import { buildHandshake, buildInterested, parseMessage, buildRequest } from "./message.js"
 import { getPeersList } from "./tracker.js"
@@ -22,6 +23,45 @@ export default function (torrentOBJ, outputPath) {
             download(peer, torrentOBJ, pieces, file);
         });
     });
+};
+
+const initializeFiles = function(torrentOBJ, outputPath) {
+
+    if(torrentOBJ.info.files) {
+        fs.mkdirSync(outputPath, {recursive: true});
+
+        let currentOffset = 0;
+
+        return torrentOBJ.info.files.map((fileOBJ) => {
+
+            const pathSegments = fileOBJ.path.map(segment => Buffer.from(segment).toString("utf-8"));
+            const fullFilePath = path.join(outputPath, ...pathSegments);
+
+            fs.mkdirSync(path.dirname(fullFilePath), {recursive: true});
+
+            const start = currentOffset;
+            const end = currentOffset + fileOBJ.length;
+            currentOffset = end;
+
+            return {
+                fd: fs.openSync(fullFilePath, "w"),
+                fullPath: fullFilePath,
+                length: fileOBJ.length,
+                start,
+                end,
+            };
+        });
+    }
+
+    return [
+        {
+            fd: fs.openSync(outputPath, "w"),
+            fullPath: outputPath,
+            length: torrentOBJ.info.length,
+            start: 0,
+            end: torrentOBJ.info.length,
+        },
+    ];
 };
 
 const download = function (peer, torrentOBJ, pieces, file) {
