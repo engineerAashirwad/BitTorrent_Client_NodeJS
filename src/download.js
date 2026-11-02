@@ -127,6 +127,12 @@ const bitfieldHandler = function(socket, pieces, queue, payload) {
 };
 
 const pieceHandler = function (socket, pieces, queue, torrentOBJ, file, pieceResponse) {
+
+    if(pieces.isDone() || isFileClosed) {
+        socket.end();
+        return;
+    }
+
     // console.log(pieceResponse);
     pieces.addReceived(pieceResponse);
 
@@ -146,6 +152,7 @@ const pieceHandler = function (socket, pieces, queue, torrentOBJ, file, pieceRes
                 if(closeErr) {
                     console.log(`Error while closing the file! Error: ${closeErr.message}`);
                 }
+                process.exit(0);
             });
         }
     });
