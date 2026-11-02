@@ -6,6 +6,9 @@ import { getPeersList } from "./tracker.js"
 import Pieces from "./Pieces.js"
 import Queue from "./Queue.js"
 
+let pendingWrites = 0;
+let isFileClosed = false;
+
 export default function (torrentOBJ, outputPath) {
 
     getPeersList(torrentOBJ, (peers) => {
@@ -67,7 +70,7 @@ const messageHandler = function (msg, socket, pieces, queue, torrentOBJ, file) {
         const m = parseMessage(msg);
 
         if (m.id === 0) {
-            chokeHandler(socket);
+            chokeHandler(socket, queue);
         }
         if (m.id === 1) {
             unchokeHandler(socket, pieces, queue);
@@ -88,8 +91,8 @@ const isHandshake = function (msg) {
     return msg.length === msg.readUInt8(0) + 49 && msg.toString("utf-8", 1, 20) === "BitTorrent protocol";
 };
 
-const chokeHandler = function (socket) {
-    socket.end();
+const chokeHandler = function (socket, queue) {
+    queue.choked = true; // We can loose valid peers by closing the connection using socket.end() Some send choke message after handshake.
 };
 
 const unchokeHandler = function (socket, pieces, queue) {
@@ -99,7 +102,7 @@ const unchokeHandler = function (socket, pieces, queue) {
 
 const haveHandler = function (socket, pieces, queue, payload) {
     const pieceIndex = payload.readUInt32BE(0);
-    const queueEmpty = queue.length === 0;
+    const queueEmpty = queue.length() === 0;
     queue.queue(pieceIndex);
     if(queueEmpty) {
         requestPiece(socket, pieces, queue);
@@ -107,7 +110,7 @@ const haveHandler = function (socket, pieces, queue, payload) {
 };
 
 const bitfieldHandler = function(socket, pieces, queue, payload) {
-    const queueEmpty = queue.length === 0;
+    const queueEmpty = queue.length() === 0;
 
     payload.forEach((byte, i) => {
         for (let j = 0; j < 8; j++)  {
@@ -124,20 +127,31 @@ const bitfieldHandler = function(socket, pieces, queue, payload) {
 };
 
 const pieceHandler = function (socket, pieces, queue, torrentOBJ, file, pieceResponse) {
-    console.log(pieceResponse);
+    // console.log(pieceResponse);
     pieces.addReceived(pieceResponse);
 
     const offset = pieceResponse.index * torrentOBJ.info["piece length"] + pieceResponse.begin;
-    fs.write(file, pieceResponse.block, 0, pieceResponse.block.length, offset, () => {});
+
+    pendingWrites++;
+    fs.write(file, pieceResponse.block, 0, pieceResponse.block.length, offset, (err) => {
+        pendingWrites--;
+        if (err) {
+            console.log(`Error while writing to disk! ${err}`);
+        }
+
+        if(pieces.isDone() && pendingWrites === 0 && !isFileClosed) {
+            isFileClosed = true;
+            console.log("Download Completed!!!");
+            fs.close(file, (closeErr) => {
+                if(closeErr) {
+                    console.log(`Error while closing the file! Error: ${closeErr.message}`);
+                }
+            });
+        }
+    });
 
     if(pieces.isDone()){
         socket.end();
-        console.log("Download Completed!!!🎉🎉🎉");
-        try {
-            fs.closeSync(file);
-        } catch (err) {
-            console.log(`Something went wrong while closing the File after downloading! Error: ${err}`);
-        }
     }
     else{
         requestPiece(socket, pieces, queue);
