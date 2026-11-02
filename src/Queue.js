@@ -8,6 +8,12 @@ export default class Queue {
     }
 
     queue(pieceIndex) {
+        // Guard against trailing bits in a Bitfield.
+        const nPieces = this._torrent.info.pieces.length / 20;
+        if (pieceIndex >= nPieces) {
+            return;
+        }
+
         const nBlocks = blocksPerPiece(this._torrent, pieceIndex);
         for(let i = 0; i < nBlocks; i++) {
             const pieceBlock = {
