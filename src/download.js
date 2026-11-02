@@ -1,6 +1,6 @@
 import net from "node:net"
 import fs from "node:fs"
-import path from "node:path"
+import nodePath from "node:path"
 import { Buffer } from "node:buffer"
 import { buildHandshake, buildInterested, parseMessage, buildRequest } from "./message.js"
 import { getPeersList } from "./tracker.js"
@@ -15,12 +15,12 @@ export default function (torrentOBJ, outputPath) {
     getPeersList(torrentOBJ, (peers) => {
 
         const pieces = new Pieces(torrentOBJ);
-        const file = fs.openSync(outputPath, "w");
+        const files = initializeFiles(torrentOBJ, outputPath);
         
         console.log(`The List of peers: `, peers);
 
         peers.forEach((peer) => {
-            download(peer, torrentOBJ, pieces, file);
+            download(peer, torrentOBJ, pieces, files);
         });
     });
 };
@@ -35,9 +35,9 @@ const initializeFiles = function(torrentOBJ, outputPath) {
         return torrentOBJ.info.files.map((fileOBJ) => {
 
             const pathSegments = fileOBJ.path.map(segment => Buffer.from(segment).toString("utf-8"));
-            const fullFilePath = path.join(outputPath, ...pathSegments);
+            const fullFilePath = nodePath.join(outputPath, ...pathSegments);
 
-            fs.mkdirSync(path.dirname(fullFilePath), {recursive: true});
+            fs.mkdirSync(nodePath.dirname(fullFilePath), {recursive: true});
 
             const start = currentOffset;
             const end = currentOffset + fileOBJ.length;
@@ -64,7 +64,7 @@ const initializeFiles = function(torrentOBJ, outputPath) {
     ];
 };
 
-const download = function (peer, torrentOBJ, pieces, file) {
+const download = function (peer, torrentOBJ, pieces, files) {
     const socket = new net.Socket();
 
     socket.on("error", (err) => {
@@ -80,7 +80,7 @@ const download = function (peer, torrentOBJ, pieces, file) {
 
     const queue = new Queue(torrentOBJ);
     onWholeMessage(socket, msg => {
-        messageHandler(msg, socket, pieces, queue, torrentOBJ, file);
+        messageHandler(msg, socket, pieces, queue, torrentOBJ, files);
     });
 
 };
@@ -101,7 +101,7 @@ const onWholeMessage = function (socket, callback) {
     });
 };
 
-const messageHandler = function (msg, socket, pieces, queue, torrentOBJ, file) {
+const messageHandler = function (msg, socket, pieces, queue, torrentOBJ, files) {
     if (isHandshake(msg)) {
         const interestedMsg = buildInterested();
         socket.write(interestedMsg);
@@ -122,7 +122,7 @@ const messageHandler = function (msg, socket, pieces, queue, torrentOBJ, file) {
             bitfieldHandler(socket, pieces, queue, m.payload);
         }
         if (m.id === 7) {
-            pieceHandler(socket, pieces, queue, torrentOBJ, file, m.payload);
+            pieceHandler(socket, pieces, queue, torrentOBJ, files, m.payload);
         }
     }
 };
@@ -166,7 +166,7 @@ const bitfieldHandler = function(socket, pieces, queue, payload) {
     }
 };
 
-const pieceHandler = function (socket, pieces, queue, torrentOBJ, file, pieceResponse) {
+const pieceHandler = function (socket, pieces, queue, torrentOBJ, files, pieceResponse) {
 
     if(pieces.isDone() || isFileClosed) {
         socket.end();
@@ -175,27 +175,45 @@ const pieceHandler = function (socket, pieces, queue, torrentOBJ, file, pieceRes
 
     pieces.addReceived(pieceResponse);
     pieces.printPercentDone();
+    
+    const blockStart = pieceResponse.index * torrentOBJ.info["piece length"] + pieceResponse.begin;
+    const blockEnd = blockStart + pieceResponse.block.length;
 
-    const offset = pieceResponse.index * torrentOBJ.info["piece length"] + pieceResponse.begin;
+    for (const file of files) {
 
-    pendingWrites++;
-    fs.write(file, pieceResponse.block, 0, pieceResponse.block.length, offset, (err) => {
-        pendingWrites--;
-        if (err) {
-            console.log(`Error while writing to disk! ${err}`);
-        }
+        if(file.end > blockStart && file.start < blockEnd && file.length > 0) {
+            const overlapStart = Math.max(blockStart, file.start);
+            const overlapEnd = Math.min(blockEnd, file.end);
 
-        if(pieces.isDone() && pendingWrites === 0 && !isFileClosed) {
-            isFileClosed = true;
-            console.log("Download Completed!!!");
-            fs.close(file, (closeErr) => {
-                if(closeErr) {
-                    console.log(`Error while closing the file! Error: ${closeErr.message}`);
+            const sliceStart = overlapStart - blockStart;
+            const sliceEnd = overlapEnd - blockStart;
+            const chunk = pieceResponse.block.subarray(sliceStart, sliceEnd);
+
+            const fileOffset = overlapStart - file.start;
+
+            pendingWrites++;
+            fs.write(file.fd, chunk, 0, chunk.length, fileOffset, (err) => {
+                pendingWrites--;
+                if(err) {
+                    console.log(`Error while writing to ${file.fullPath} ! Error: ${err}`);
                 }
-                process.exit(0);
+
+                if(pieces.isDone() && pendingWrites === 0 && !isFileClosed) {
+                    isFileClosed = true;
+                    console.log("Download Completed!!!");
+
+                    files.forEach((file) => {
+                        fs.close(file.fd, (closeErr) => {
+                            if(closeErr) {
+                                console.log(`Error While closing ${file.fullPath} ! Error message: ${closeErr.message}`);
+                            }
+                            process.exit(0);
+                        });
+                    });
+                }
             });
         }
-    });
+    }
 
     if(pieces.isDone()){
         socket.end();
