@@ -11,6 +11,16 @@ export const parseTorrent = function (filePath) {
 };
 
 export const announceTracker = function (torrentOBJ) {
+    if(torrentOBJ["announce-list"]) {
+        const trackers = torrentOBJ["announce-list"].flat().map(buf => Buffer.from(buf).toString("utf-8"));
+
+        const openTrackrUDP = trackers.find(tracker => tracker.startsWith("udp://") && tracker.includes("opentrackr"));
+
+        if(openTrackrUDP) {
+            return openTrackrUDP;
+        }
+    }
+
     return Buffer.from(torrentOBJ.announce).toString("utf-8");
 };
 
