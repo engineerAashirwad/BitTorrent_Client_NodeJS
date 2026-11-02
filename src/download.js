@@ -133,8 +133,8 @@ const pieceHandler = function (socket, pieces, queue, torrentOBJ, file, pieceRes
         return;
     }
 
-    // console.log(pieceResponse);
     pieces.addReceived(pieceResponse);
+    pieces.printPercentDone();
 
     const offset = pieceResponse.index * torrentOBJ.info["piece length"] + pieceResponse.begin;
 

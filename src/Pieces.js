@@ -34,4 +34,17 @@ export default class Pieces {
     isDone() {
         return this._received.every((blocks) => blocks.every(i => i));
     }
+
+    printPercentDone() {
+        const downloaded = this._received.reduce((totalBlocks, blocks) => {
+            return blocks.filter(i => i).length + totalBlocks;
+        }, 0);
+
+        const total = this._received.reduce((totalBlocks, blocks) => {
+            return blocks.length + totalBlocks;
+        }, 0);
+
+        const percentage = Math.floor(((downloaded / total) * 100) * 100) / 100;
+        process.stdout.write(`Download Progress: ${percentage}% (${downloaded}/${total} blocks)\r`);
+    }
 };
