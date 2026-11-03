@@ -8,7 +8,9 @@ export const getPeersList = function (torrentOBJ, callback) {
     const socket = dgram.createSocket("udp4");
 
     const url = new URL(announceTracker(torrentOBJ));
-
+    
+    socket.bind(6881);
+    
     const sendConnect = () => {
         const connectionRequest = buildConnectionReq();
         socket.send(connectionRequest, 0, connectionRequest.length, url.port, url.hostname, (err, reqBytes) => {
