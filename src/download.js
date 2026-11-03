@@ -200,14 +200,18 @@ const pieceHandler = function (socket, pieces, queue, torrentOBJ, files, pieceRe
 
                 if(pieces.isDone() && pendingWrites === 0 && !isFileClosed) {
                     isFileClosed = true;
-                    console.log("Download Completed!!!");
+                    console.log("\nDownload Completed!!!"); // "\n" added so it doesn't overlap with "Download Progress" Log.
+                    let closedCount = 0;
 
                     files.forEach((file) => {
                         fs.close(file.fd, (closeErr) => {
                             if(closeErr) {
                                 console.log(`Error While closing ${file.fullPath} ! Error message: ${closeErr.message}`);
                             }
-                            process.exit(0);
+                            closedCount++;
+                            if(closedCount === files.length) {
+                                process.exit(0);
+                            }
                         });
                     });
                 }
