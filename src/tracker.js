@@ -9,16 +9,21 @@ export const getPeersList = function (torrentOBJ, callback) {
 
     const url = new URL(announceTracker(torrentOBJ));
 
-    const connectionRequest = buildConnectionReq();
+    const sendConnect = () => {
+        const connectionRequest = buildConnectionReq();
+        socket.send(connectionRequest, 0, connectionRequest.length, url.port, url.hostname, (err, reqBytes) => {
+            if (err) {
+                throw new Error(`An Error occurred while sending the connection request to the tracker! Error message: ${err.message}`);
+            }
+            console.log(`Connection request of size ${reqBytes} bytes sent to ${url.hostname}:${url.port}`);
+        });
+    };
 
-    socket.send(connectionRequest, 0, connectionRequest.length, url.port, url.hostname, (err, reqBytes) => {
-        if (err) {
-            throw new Error(`An Error occurred while sending the connection request to the tracker! Error message: ${err.message}`);
-        }
-        console.log(`Connection request of size ${reqBytes} bytes sent to ${url.hostname}:${url.port}`);
-    });
+    sendConnect();
+    const retryTimer = setInterval(sendConnect, 2500);
 
     socket.on("message", (response) => {
+        clearInterval(retryTimer);
         if (responseType(response) === "connect") {
             const connectionResponse = parseConnectionRes(response);
 
