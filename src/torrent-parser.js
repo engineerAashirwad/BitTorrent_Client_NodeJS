@@ -10,18 +10,22 @@ export const parseTorrent = function (filePath) {
     return bencode.decode(torrentBuffer);
 };
 
-export const announceTracker = function (torrentOBJ) {
+export const announceTrackerList = function (torrentOBJ) {
+    const udpTrackers = new Set();
+
     if(torrentOBJ["announce-list"]) {
-        const trackers = torrentOBJ["announce-list"].flat().map(buf => Buffer.from(buf).toString("utf-8"));
+        const udpURLs = torrentOBJ["announce-list"].flat().map(buf => Buffer.from(buf).toString("utf-8")).filter(trackURL => trackURL.startsWith("udp://"));
+        udpURLs.forEach((udpUrl => udpTrackers.add(udpUrl)));
+    }
 
-        const openTrackrUDP = trackers.find(tracker => tracker.startsWith("udp://") && tracker.includes("opentrackr"));
-
-        if(openTrackrUDP) {
-            return openTrackrUDP;
+    if (torrentOBJ.announce) {
+        const mainURL = Buffer.from(torrentOBJ.announce).toString("utf-8");
+        if(mainURL.startsWith("udp://")) {
+            udpTrackers.add(mainURL);
         }
     }
 
-    return Buffer.from(torrentOBJ.announce).toString("utf-8");
+    return Array.from(udpTrackers);
 };
 
 export const info_Hash = function (torrentOBJ) {
