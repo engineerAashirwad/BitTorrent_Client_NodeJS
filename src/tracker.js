@@ -1,54 +1,100 @@
 import dgram from "node:dgram"
 import crypto from "node:crypto"
 import { Buffer } from "node:buffer"
-import { announceTracker, info_Hash, itemSize } from "./torrent-parser.js"
+import { announceTrackerList, info_Hash, itemSize } from "./torrent-parser.js"
 import { genPeerId } from "./peer-id.js"
 
 export const getPeersList = function (torrentOBJ, callback) {
     const socket = dgram.createSocket("udp4");
+    const trackerURLs = announceTrackerList(torrentOBJ);
 
-    const url = new URL(announceTracker(torrentOBJ));
-    
-    socket.bind(6881);
-    
-    const sendConnect = () => {
-        const connectionRequest = buildConnectionReq();
-        socket.send(connectionRequest, 0, connectionRequest.length, url.port, url.hostname, (err, reqBytes) => {
-            if (err) {
-                throw new Error(`An Error occurred while sending the connection request to the tracker! Error message: ${err.message}`);
+    let isDone = false;
+    let retryCount = 0;
+    const MAX_RETRIES = 5;
+
+    socket.on("error", (err) => {
+        console.log(`UDP Socket Error!! ${err.message}`);
+    });
+
+    const sendRequestToAllTrackers = function() {
+        if(isDone) {
+            return;
+        }
+
+        if(retryCount >= MAX_RETRIES) {
+            console.log("All UDP Trackers Timed Out!!! Check your Internet Connection and also make sure every tracker is Online.");
+            clearInterval(retryIntervalTimer);
+            socket.close();
+            return;
+        }
+
+        retryCount++;
+        console.log(`\n[Attempt ${retryCount}/${MAX_RETRIES}] Querying ${trackerURLs.length} UDP Trackers...`);
+
+        for (const trackerUrl of trackerURLs) {
+            let urlTracker;
+            try {
+                urlTracker = new URL(trackerUrl);
+            } catch {
+                continue;
             }
-            console.log(`Connection request of size ${reqBytes} bytes sent to ${url.hostname}:${url.port}`);
-        });
+
+            const PORT = Number(urlTracker.port);
+            const connectionRequest = buildConnectionReq();
+
+            socket.send(connectionRequest, 0, connectionRequest.length, PORT, urlTracker.hostname, (err, reqBytes) => {
+                if(err) {
+                    console.log(`Skipping Unreachable Tracker ${urlTracker.hostname}:${PORT} (${err.message})`);
+                    return;
+                }
+                console.log(`Connection Request of ${reqBytes} Bytes(B) sent to ${urlTracker.hostname}:${PORT}`);
+            });
+        }
     };
 
-    sendConnect();
-    const retryTimer = setInterval(sendConnect, 2500);
+    socket.on("message", (response, rInfo) => {
+        if(isDone || response.length < 8) {
+            return;
+        }
 
-    socket.on("message", (response) => {
-        clearInterval(retryTimer);
-        if (responseType(response) === "connect") {
+        if(responseType(response) === "connect") {
             const connectionResponse = parseConnectionRes(response);
 
-            console.log(`Recieved Connection id, length: ${connectionResponse.connectionID.length} , hex: ${connectionResponse.connectionID.toString("hex")} , Sending Announce Request...`);
+            console.log(`Received Connection ID (${connectionResponse.connectionID.toString("hex")}) from ${rInfo.address}:${rInfo.port}, Sending Announce Request...`);
 
             const announceRequest = buildAnnounceReq(connectionResponse.connectionID, torrentOBJ);
 
-            socket.send(announceRequest, 0, announceRequest.length, url.port, url.hostname);    // Needs callback for error handling and "Request sent!" Log.
+            socket.send(announceRequest, 0, announceRequest.length, rInfo.port, rInfo.address, (err) => {
+                if(err) {
+                    console.log(`Failed to send Announce Request to ${rInfo.address}:${rInfo.port} ! Error: ${err.message}`);
+                }
+            });
         }
+
         else if (responseType(response) === "announce") {
             const announceResponse = parseAnnounceRes(response);
-            console.log(`Success! Found ${announceResponse.peers.length} peers.`);
-            console.log(`There are ${announceResponse.leechers} leechers and there are ${announceResponse.seeders} seeders. The interval time is: ${announceResponse.interval} seconds.`);
+
+            if(announceResponse.peers.length === 0) {
+                console.log(`Tracker ${rInfo.address}:${rInfo.port} returned 0 Peers, waiting for other trackers...`);
+                return;
+            }
+
+            isDone = true;
+            clearInterval(retryIntervalTimer);
+
+            console.log(`Success from ${rInfo.address}:${rInfo.port}!! Found ${announceResponse.peers.length} Peers.`);
+            console.log(`There are, Leechers: ${announceResponse.leechers}, Seeders: ${announceResponse.seeders} and Interval: ${announceResponse.interval} seconds`);
 
             callback(announceResponse.peers);
-
             socket.close();
-
         }
         else if (responseType(response) === "error") {
-            console.log(`Request rejected by tracker. Rejection message: ${response.subarray(8).toString("utf-8")}`);
+            console.log(`Request rejected by tracker ${rInfo.address}:${rInfo.port}: ${response.subarray(8).toString("utf-8")}`);
         }
     });
+
+    sendRequestToAllTrackers();
+    const retryIntervalTimer = setInterval(sendRequestToAllTrackers, 5000);
 };
 
 const buildConnectionReq = function () {
