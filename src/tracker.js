@@ -1,6 +1,9 @@
 import dgram from "node:dgram"
+import http from "node:http"
+import https from "node:https"
 import crypto from "node:crypto"
 import { Buffer } from "node:buffer"
+import bencode from "bencode"
 import { announceTrackerList, info_Hash, itemSize } from "./torrent-parser.js"
 import { genPeerId } from "./peer-id.js"
 
@@ -12,6 +15,26 @@ export const getPeersList = function (torrentOBJ, callback) {
     let retryCount = 0;
     const MAX_RETRIES = 5;
 
+    const finishWithPeers = function(sourceLabel, announceResponse) {
+        if (isDone) {
+            return
+        }
+
+        isDone = true;
+        clearInterval(retryIntervalTimer);
+
+        console.log(`Success from ${sourceLabel}!! Found ${announceResponse.peers.length} Peers.`);
+        console.log(`There are, Leechers: ${announceResponse.leechers}, Seeders: ${announceResponse.seeders} and Interval: ${announceResponse.interval} seconds.`);
+
+        try{
+            socket.close();
+        } catch (err) {
+            console.log(`Error while closing socket! Error: ${err}`);
+        }
+
+        callback(announceResponse.peers);
+    };
+
     socket.on("error", (err) => {
         console.log(`UDP Socket Error!! ${err.message}`);
     });
@@ -22,14 +45,14 @@ export const getPeersList = function (torrentOBJ, callback) {
         }
 
         if(retryCount >= MAX_RETRIES) {
-            console.log("All UDP Trackers Timed Out!!! Check your Internet Connection and also make sure every tracker is Online.");
+            console.log("All Trackers Timed Out!!! Check your Internet Connection and also make sure atleast one tracker is Online.");
             clearInterval(retryIntervalTimer);
             socket.close();
             return;
         }
 
         retryCount++;
-        console.log(`\n[Attempt ${retryCount}/${MAX_RETRIES}] Querying ${trackerURLs.length} UDP Trackers...`);
+        console.log(`\n[Attempt ${retryCount}/${MAX_RETRIES}] Querying ${trackerURLs.length} Trackers...`);
 
         for (const trackerUrl of trackerURLs) {
             let urlTracker;
@@ -39,16 +62,38 @@ export const getPeersList = function (torrentOBJ, callback) {
                 continue;
             }
 
-            const PORT = Number(urlTracker.port);
-            const connectionRequest = buildConnectionReq();
+            if(urlTracker.protocol === "udp:") {
+                const PORT = Number(urlTracker.port);
+                const connectionRequest = buildConnectionReq();
 
-            socket.send(connectionRequest, 0, connectionRequest.length, PORT, urlTracker.hostname, (err, reqBytes) => {
-                if(err) {
-                    console.log(`Skipping Unreachable Tracker ${urlTracker.hostname}:${PORT} (${err.message})`);
-                    return;
-                }
-                console.log(`Connection Request of ${reqBytes} Bytes(B) sent to ${urlTracker.hostname}:${PORT}`);
-            });
+                socket.send(connectionRequest, 0, connectionRequest.length, PORT, urlTracker.hostname, (err, reqBytes) => {
+                    if(err) {
+                        console.log(`Skipping Unreachable UDP Tracker ${urlTracker.hostname}:${PORT} (${err.message})`);
+                        return;
+                    }
+                    console.log(`UDP Connection Request of ${reqBytes} Bytes(B) sent to ${urlTracker.hostname}:${PORT}`);
+                });
+            }
+            
+            else if(urlTracker.protocol === "http:" || urlTracker.protocol === "https:") {
+                requestHttpTracker(trackerUrl, torrentOBJ, (err, announceResponse) => {
+                    if (isDone) {
+                        return;
+                    }
+
+                    if (err) {
+                        console.log(`HTTP Tracker ${urlTracker.hostname} failed! Error: ${err.message}`);
+                        return;
+                    }
+
+                    if(announceResponse.peers.length === 0) {
+                        console.log(`HTTP Tracker ${urlTracker.hostname} returned 0 Peers, Waiting for other Trackers...`);
+                        return;
+                    }
+
+                    finishWithPeers(urlTracker.hostname, announceResponse);
+                });
+            }
         }
     };
 
@@ -75,27 +120,23 @@ export const getPeersList = function (torrentOBJ, callback) {
             const announceResponse = parseAnnounceRes(response);
 
             if(announceResponse.peers.length === 0) {
-                console.log(`Tracker ${rInfo.address}:${rInfo.port} returned 0 Peers, waiting for other trackers...`);
+                console.log(`UDP Tracker ${rInfo.address}:${rInfo.port} returned 0 Peers, waiting for other trackers...`);
                 return;
             }
 
-            isDone = true;
-            clearInterval(retryIntervalTimer);
-
-            console.log(`Success from ${rInfo.address}:${rInfo.port}!! Found ${announceResponse.peers.length} Peers.`);
-            console.log(`There are, Leechers: ${announceResponse.leechers}, Seeders: ${announceResponse.seeders} and Interval: ${announceResponse.interval} seconds`);
-
-            callback(announceResponse.peers);
-            socket.close();
+            finishWithPeers(`${rInfo.address}:${rInfo.port}`, announceResponse);
         }
+
         else if (responseType(response) === "error") {
-            console.log(`Request rejected by tracker ${rInfo.address}:${rInfo.port}: ${response.subarray(8).toString("utf-8")}`);
+            console.log(`Request rejected by UDP tracker ${rInfo.address}:${rInfo.port}: ${response.subarray(8).toString("utf-8")}`);
         }
     });
 
     sendRequestToAllTrackers();
     const retryIntervalTimer = setInterval(sendRequestToAllTrackers, 5000);
 };
+
+// <-------------------------- UDP TRACKER HELPER FUNCTIONS --------------------------------->
 
 const buildConnectionReq = function () {
     const connectMessage = Buffer.alloc(16);
@@ -169,4 +210,110 @@ const groupAndParsePeers = function (peerBuffer) {
     }
 
     return peers;
+};
+
+// <----------------------------- HTTP/HTTPS TRACKER HELPER FUNCTIONS ---------------------------------->
+
+const urlEncodeBytes = function(buf) {
+    return Array.from(buf, (byte) => `%${byte.toString(16).padStart(2, "0")}`).join("");
+};
+
+const buildHttpAnnounceURL = function(baseURL, torrentOBJ, PORT = 6881) {
+    const infoHashEncoded = urlEncodeBytes(info_Hash(torrentOBJ));
+    const peerIdEncoded = urlEncodeBytes(genPeerId());
+    const left = itemSize(torrentOBJ).readBigUInt64BE(0).toString();
+
+    const separator = baseURL.includes("?") ? "&" : "?";
+    const query = [
+        `info_hash=${infoHashEncoded}`,
+        `peer_id=${peerIdEncoded}`,
+        `port=${PORT}`,
+        `uploaded=0`,
+        `downloaded=0`,
+        `left=${left}`,
+        `event=started`,
+        `compact=1`,
+        `numwant=100`,
+    ].join("&");
+
+    return `${baseURL}${separator}${query}`;
+};
+
+const requestHttpTracker = function(trackerURL, torrentOBJ, callback, redirectDepth = 0) {
+    if(redirectDepth > 3) {
+        return callback(new Error("Too many HTTP/HTTPS Redirects!"));
+    }
+
+    const fullUrl = redirectDepth === 0 ? buildHttpAnnounceURL(trackerURL, torrentOBJ) : trackerURL;
+    const parsedUrl = new URL(fullUrl);
+    const client = parsedUrl.protocol === "https:" ? https : http;
+
+    console.log(`Sending HTTP GET Announce Request to ${parsedUrl.hostname}...`);
+
+    const req = client.get(fullUrl, {timeout: 4500, family: 4}, (res) => {
+
+        if(res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+            const redirectUrl = new URL(res.headers.location, fullUrl).toString();
+            res.resume();
+            return requestHttpTracker(redirectUrl, torrentOBJ, callback, redirectDepth + 1);
+        }
+
+        if(res.statusCode !== 200) {
+            res.resume();
+            return callback(new Error(`HTTP Status Code ${res.statusCode}`));
+        }
+
+        const chunks = [];
+        res.on("data", (chunk) => chunks.push(chunk));
+
+        res.on("end", () => {
+            try {
+                const bodyBuffer = Buffer.concat(chunks);
+                const decoded = bencode.decode(bodyBuffer);
+
+                if(decoded["failure reason"]) {
+                    const reason = Buffer.from(decoded["failure reason"]).toString("utf-8");
+                    return callback(new Error(`Tracker rejected request: ${reason}`));
+                }
+
+                const parsedResponse = parseHttpAnnounceRes(decoded);
+                callback(null, parsedResponse);
+            } catch (err) {
+                callback(new Error(`Failed to decode Bencoded tracker response: ${err.message}`));
+            }
+        });
+    });
+
+    req.on("timeout", () => {
+        req.destroy(new Error("Request Timed Out!"));
+    });
+
+    req.on("error", (err) => {
+        callback(err);
+    });
+};
+
+const parseHttpAnnounceRes = function(decoded) {
+    let peers = [];
+
+    if(decoded.peers) {
+        if(Array.isArray(decoded.peers)) {
+            peers = decoded.peers.map((peer) => {
+                return {
+                    ip: Buffer.from(peer.ip).toString("utf-8"),
+                    port: peer.port,
+                };
+            });
+        }
+        else{
+            peers = groupAndParsePeers(Buffer.from(decoded.peers));
+        }
+    }
+
+    return {
+        interval: decoded.interval || 0,
+        leechers: decoded.incomplete || 0,
+        seeders: decoded.complete || 0,
+        peers,
+    };
 };
