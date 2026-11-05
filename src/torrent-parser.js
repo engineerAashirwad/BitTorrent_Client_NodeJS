@@ -10,7 +10,7 @@ export const parseTorrent = function (filePath) {
     return bencode.decode(torrentBuffer);
 };
 
-const isSupportedTracker = (trackerUrl) => trackerUrl.startsWith("udp://") || trackerUrl.startsWith("http://") || trackerUrl.startsWith("https://");
+const isSupportedTracker = (trackerUrl) => (trackerUrl.startsWith("udp://") || trackerUrl.startsWith("http://") || trackerUrl.startsWith("https://")) && !trackerUrl.includes("ipv6.");
 
 export const announceTrackerList = function (torrentOBJ) {
     const allTrackers = new Set();
