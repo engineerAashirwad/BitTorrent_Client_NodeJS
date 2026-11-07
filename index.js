@@ -3,6 +3,16 @@ import { genPeerId } from "./src/peer-id.js"
 import download from "./src/download.js"
 import {Buffer} from "node:buffer"
 
+// Missing features:
+// 1. Bencode Parser.
+// 2. Transaction ID Validation
+// 3. SHA-1 Verification
+// 4. Request Pipeline
+// 5. CLI
+
+// BUGS
+// 1. 99% Stalling / Orphaned Block Problem
+
 // big-buck-bunny.torrent -> UDP Tracker URL
 // koneko-chan.torrent -> HTTP Tracker URL
 const torrentFilePath = process.argv[2];
